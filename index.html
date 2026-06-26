@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart TV OS - App Store</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b; /* Zinc 950 */
+            color: #f4f4f5;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar personalizado */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        .view-container {
+            display: none;
+        }
+        .view-container.active {
+            display: block;
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass-panel {
+            background: rgba(15, 15, 15, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(63, 63, 70, 0.4);
+        }
+
+        .app-card {
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .app-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 15px 30px -10px rgba(147, 51, 234, 0.3);
+            border-color: rgba(147, 51, 234, 0.5);
+        }
+
+        .hero-banner::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 70%;
+            background: linear-gradient(to top, #09090b, transparent);
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+        }
+        .modal-overlay.active {
+            display: flex;
+            animation: modalFadeIn 0.2s ease-out forwards;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Dropdown menu animation */
+        #dropdown-menu {
+            display: none;
+            transform-origin: top right;
+        }
+        #dropdown-menu.active {
+            display: block;
+            animation: dropdownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes dropdownFade {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative select-none">
+
+    <!-- HEADER / BARRA DE NAVEGACIÓN -->
+    <nav class="glass-panel sticky top-0 z-40 px-8 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-3 cursor-pointer" onclick="goHome()">
+            <div class="bg-purple-600 p-2.5 rounded-xl text-white shadow-lg shadow-purple-600/30">
+                <i class="fa-solid fa-square-play text-xl"></i>
+            </div>
+            <h1 class="text-2xl font-black tracking-tight text-white">TV<span class="text-purple-500">Store</span></h1>
+        </div>
+        
+        <!-- Controles de búsqueda y filtros -->
+        <div class="flex items-center gap-6">
+            <div id="search-bar-wrapper" class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 transform -translate-y-1/2 text-zinc-400"></i>
+                <input type="text" id="searchInput" placeholder="Buscar aplicaciones..." class="bg-zinc-900/90 border border-zinc-800 text-white text-sm rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent block w-72 pl-12 pr-4 py-2.5 transition-all outline-none">
+            </div>
+
+            <button onclick="requestPassword(() => switchView('view-pending'))" class="text-zinc-400 hover:text-purple-400 transition-colors text-sm font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-clock-rotate-left"></i> Pendientes
+            </button>
+            <button id="btn-change-pass" onclick="openChangePassword()" class="text-zinc-400 hover:text-purple-400 transition-colors text-sm font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-key"></i> Seguridad
+            </button>
+            <button onclick="switchView('view-upload')" class="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition-all shadow-lg shadow-purple-600/20">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Subir App
+            </button>
+        </div>
+    </nav>
+
+    <!-- CONTENIDO DE LA TIENDA -->
+    <main class="flex-1 w-full max-w-7xl mx-auto p-8 relative">
+
+        <!-- CATEGORÍAS RÁPIDAS (Se muestran solo en el Home) -->
+        <div id="category-bar" class="flex gap-3 mb-8">
+            <button onclick="filterCategory('all')" id="cat-all" class="cat-btn bg-purple-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition-all">Todas</button>
+            <button onclick="filterCategory('Juegos')" id="cat-juegos" class="cat-btn bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-5 py-2 rounded-full text-sm font-semibold transition-all">Juegos</button>
+            <button onclick="filterCategory('Apps')" id="cat-apps" class="cat-btn bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-5 py-2 rounded-full text-sm font-semibold transition-all">Herramientas/Apps</button>
+            <button onclick="filterCategory('Entretenimiento')" id="cat-entre" class="cat-btn bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-5 py-2 rounded-full text-sm font-semibold transition-all">Entretenimiento</button>
+        </div>
+
+        <!-- VISTA: HOME (TIENDA PRINCIPAL) -->
+        <div id="view-home" class="view-container active">
+            <div class="mb-8">
+                <h2 class="text-4xl font-extrabold text-white tracking-tight">Destacados de la semana</h2>
+                <p class="text-zinc-400 mt-1">Explora apps aprobadas listas para instalar en tu TV.</p>
+            </div>
+            
+            <div id="apps-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                <!-- Se inyectan las apps desde JS -->
+            </div>
+            
+            <div id="empty-store" class="hidden flex-col items-center justify-center py-24 text-zinc-500">
+                <i class="fa-solid fa-box-open text-6xl mb-4"></i>
+                <p class="text-xl font-medium">No se encontraron aplicaciones.</p>
+                <p class="text-sm text-zinc-600 mt-1">¡Sé el primero en subir una!</p>
+            </div>
+        </div>
+
+        <!-- VISTA: DETALLES DE APP -->
+        <div id="view-details" class="view-container">
+            <!-- Se genera dinámicamente con JS -->
+        </div>
+
+        <!-- VISTA: SUBIR APP -->
+        <div id="view-upload" class="view-container max-w-2xl mx-auto mt-4">
+            <div class="glass-panel p-8 rounded-3xl border border-zinc-800">
+                <div class="flex items-center gap-4 mb-8 text-purple-400">
+                    <button onclick="goHome()" class="hover:text-white text-xl transition-colors"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h2 class="text-3xl font-extrabold text-white">Publicar Nueva App</h2>
+                </div>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-zinc-300 mb-2">Título de la App</label>
+                        <input type="text" id="up-title" class="w-full bg-zinc-900/80 border border-zinc-700/60 rounded-xl p-3.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all" placeholder="Ej: Neon Rider 2D">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-zinc-300 mb-2">Categoría</label>
+                        <select id="up-category" class="w-full bg-zinc-900/80 border border-zinc-700/60 rounded-xl p-3.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                            <option value="Juegos">Juegos</option>
+                            <option value="Apps">Herramientas / Apps</option>
+                            <option value="Entretenimiento">Entretenimiento</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-zinc-300 mb-2">Descripción</label>
+                        <textarea id="up-desc" rows="4" class="w-full bg-zinc-900/80 border border-zinc-700/60 rounded-xl p-3.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all resize-none" placeholder="Escribe detalles de cómo se juega o de qué trata la app..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-zinc-300 mb-2">Archivo de la App (.txt)</label>
+                        <div class="flex items-center justify-center w-full">
+                            <label class="flex flex-col items-center justify-center w-full h-36 border-2 border-zinc-700 border-dashed rounded-2xl cursor-pointer bg-zinc-900/50 hover:bg-zinc-900 transition-colors">
+                                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                    <i class="fa-solid fa-file-code text-4xl text-purple-500 mb-2"></i>
+                                    <p class="text-sm text-zinc-300" id="file-name-display"><span class="font-bold text-purple-400 hover:underline">Presiona para buscar</span> o arrastra el .txt</p>
+                                    <p class="text-xs text-zinc-500 mt-1">Línea 1: Icono, Línea 2: Fondo, Línea 3: Código HTML</p>
+                                </div>
+                                <input type="file" id="up-file" class="hidden" accept=".txt" onchange="handleFileSelected(this)" />
+                            </label>
+                        </div>
+                    </div>
+                    <button onclick="submitApp()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl text-lg mt-4 transition-all shadow-lg shadow-purple-600/30">
+                        Enviar a la sección de pendientes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA: APPS PENDIENTES -->
+        <div id="view-pending" class="view-container">
+            <div class="flex items-center gap-4 mb-8 mt-4 text-purple-400">
+                <button onclick="goHome()" class="hover:text-white text-xl transition-colors"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2 class="text-3xl font-extrabold text-white">Buzón de Apps Pendientes</h2>
+            </div>
+            <div id="pending-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Se inyectan las pendientes -->
+            </div>
+            <div id="empty-pending" class="hidden flex-col items-center justify-center py-24 text-zinc-500">
+                <i class="fa-solid fa-circle-check text-6xl mb-4 text-purple-500"></i>
+                <p class="text-xl font-medium text-white">¡No hay apps pendientes de aprobación!</p>
+                <p class="text-sm text-zinc-500 mt-1">Buen trabajo. Todo el catálogo está verificado.</p>
+            </div>
+        </div>
+
+        <!-- VISTA: CONFIRMAR ELIMINACIÓN (PANTALLA CENTRADA) -->
+        <div id="view-confirm-delete" class="view-container absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#09090b]">
+            <div class="glass-panel p-12 rounded-3xl flex flex-col items-center text-center max-w-lg border-red-500/40 border-2">
+                <div class="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+                    <i class="fa-solid fa-triangle-exclamation text-4xl text-red-500"></i>
+                </div>
+                <img id="del-icon" src="" class="w-24 h-24 rounded-2xl object-cover mb-4 shadow-xl border-4 border-zinc-800 bg-zinc-900">
+                <h2 id="del-title" class="text-3xl font-extrabold text-white mb-2">Nombre de App</h2>
+                <p class="text-red-400 text-md leading-relaxed mb-8">¿Estás seguro de hacer esta acción? Esta acción es irreversible y eliminará permanentemente la aplicación de la tienda.</p>
+                
+                <div class="flex gap-4 w-full">
+                    <button onclick="cancelDelete()" class="flex-1 py-3.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors">Cancelar</button>
+                    <button onclick="executeDelete()" class="flex-1 py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/30">Sí, Eliminar</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODAL: CONTRASEÑA -->
+    <div id="modal-password" class="modal-overlay fixed inset-0 z-[100] items-center justify-center">
+        <div class="glass-panel p-8 rounded-3xl w-full max-w-md transform transition-all border-purple-500/30 border shadow-2xl">
+            <h3 class="text-2xl font-black mb-2 text-center text-white">Área Administrativa</h3>
+            <p class="text-zinc-400 text-sm text-center mb-6">Ingresa la contraseña para autorizar la acción</p>
+            <input type="password" id="pass-input" class="w-full bg-zinc-900/90 border border-zinc-700 rounded-xl p-3.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center tracking-widest text-lg mb-6" placeholder="••••••••">
+            <div class="flex gap-3">
+                <button onclick="closeModal('modal-password')" class="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold">Cancelar</button>
+                <button onclick="verifyPassword()" class="flex-1 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold shadow-lg shadow-purple-600/20">Ingresar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CAMBIAR CONTRASEÑA -->
+    <div id="modal-change-pass" class="modal-overlay fixed inset-0 z-[100] items-center justify-center">
+        <div class="glass-panel p-8 rounded-3xl w-full max-w-md border-purple-500/30 border shadow-2xl">
+            <h3 class="text-2xl font-black mb-6 text-center text-white">Modificar Llave de Acceso</h3>
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-xs font-bold text-zinc-400 uppercase mb-1">Nueva Contraseña</label>
+                    <input type="password" id="new-pass-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-zinc-400 uppercase mb-1">Confirmar Nueva Contraseña</label>
+                    <input type="password" id="new-pass-2" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeModal('modal-change-pass')" class="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold">Cancelar</button>
+                <button onclick="saveNewPassword()" class="flex-1 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold shadow-lg shadow-purple-600/20">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MENSAJES (Sustituto de alerts) -->
+    <div id="modal-message" class="modal-overlay fixed inset-0 z-[110] items-center justify-center">
+        <div class="glass-panel p-8 rounded-3xl w-full max-w-md text-center border border-zinc-800">
+            <div id="msg-icon" class="text-5xl mb-4"></div>
+            <h3 id="msg-title" class="text-2xl font-bold mb-2"></h3>
+            <p id="msg-text" class="text-zinc-400 mb-6"></p>
+            <button onclick="closeModal('modal-message')" class="w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold shadow-lg shadow-purple-600/20">De acuerdo</button>
+        </div>
+    </div>
+
+    <!-- SDK DE FIREBASE (Importaciones obligatorias del framework) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // CONFIGURACIÓN GLOBAL DE INSTANCIA
+        let firebaseConfig = {};
+        let appId = "default-app-id";
+        let db = null;
+        let auth = null;
+        
+        // Base de Datos Local Híbrida (Para asegurar que NUNCA se quede en negro la pantalla)
+        let localApps = [
+            {
+                id: "local_1",
+                title: "Neon Rider 2D",
+                category: "Juegos",
+                description: "¡Esquiva obstáculos y cambia de carril en esta autopista nocturna infinita en 2D! El clásico juego de reflejos adaptado a tu Smart TV.",
+                iconUrl: "https://img.icons8.com/nolan/512/car.png",
+                bgUrl: "https://images.unsplash.com/photo-1554620121-59e7f3f6e3a4?q=80&w=1920",
+                fileContent: "https://img.icons8.com/nolan/512/car.png\nhttps://images.unsplash.com/photo-1554620121-59e7f3f6e3a4?q=80&w=1920\n<!DOCTYPE html><html><body><h1>Neon Rider</h1></body></html>",
+                status: "approved",
+                timestamp: Date.now() - 10000
+            },
+            {
+                id: "local_2",
+                title: "YouTube TV OS",
+                category: "Entretenimiento",
+                description: "Visualiza tus videos favoritos de YouTube directamente en un cliente limpio, estético y fluido para tu Smart TV.",
+                iconUrl: "https://img.icons8.com/color/512/youtube-play.png",
+                bgUrl: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1920",
+                fileContent: "https://img.icons8.com/color/512/youtube-play.png\nhttps://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1920\n<!DOCTYPE html><html><body><h1>YouTube</h1></body></html>",
+                status: "approved",
+                timestamp: Date.now() - 5000
+            }
+        ];
+
+        let allApps = [...localApps];
+        let systemPassword = "occurtell160"; // Contraseña requerida
+        let currentCategory = "all";
+        let pendingActionCallback = null;
+        let appToDelete = null;
+
+        // Lee el config provisto por el iframe o carga local
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            }
+        } catch(e) {
+            console.warn("Iniciando en base de datos local temporal.");
+        }
+
+        // Inicializador de base de datos
+        async function init() {
+            if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    // Regla de Oro de Autenticación en Canvas
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            listenToDatabase();
+                        }
+                    });
+                } catch(error) {
+                    console.error("Error inicializando Firebase:", error);
+                    setupLocalStorageFallback();
+                }
+            } else {
+                setupLocalStorageFallback();
+            }
+        }
+
+        // Listener de base de datos en tiempo real (Regla de Rutas Estrictas)
+        function listenToDatabase() {
+            if(!db) return;
+            const appsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'apps');
+            const settingsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'settings');
+
+            // Suscribirse a las Apps aprobadas y pendientes
+            onSnapshot(appsCollection, (snapshot) => {
+                const fbApps = [];
+                snapshot.forEach(doc => {
+                    fbApps.push({ id: doc.id, ...doc.data() });
+                });
+                
+                if (fbApps.length > 0) {
+                    allApps = fbApps;
+                } else {
+                    allApps = [...localApps];
+                }
+                
+                allApps.sort((a,b) => b.timestamp - a.timestamp);
+                renderStore();
+                renderPending();
+            }, (error) => {
+                console.error("Error en Snapshot de Apps:", error);
+            });
+
+            // Suscribirse a los Ajustes de Seguridad (Contraseña)
+            onSnapshot(settingsCollection, (snapshot) => {
+                snapshot.forEach(doc => {
+                    if (doc.id === 'security') {
+                        systemPassword = doc.data().adminPass || "occurtell160";
+                    }
+                });
+            }, (error) => {
+                console.error("Error en Snapshot de Ajustes:", error);
+            });
+        }
+
+        // Fallback local robusto (LocalStorage)
+        function setupLocalStorageFallback() {
+            const stored = localStorage.getItem('tv_store_apps');
+            const storedPass = localStorage.getItem('tv_store_pass');
+            
+            if (stored) {
+                allApps = JSON.parse(stored);
+            } else {
+                localStorage.setItem('tv_store_apps', JSON.stringify(localApps));
+                allApps = [...localApps];
+            }
+
+            if (storedPass) {
+                systemPassword = storedPass;
+            } else {
+                localStorage.setItem('tv_store_pass', systemPassword);
+            }
+
+            renderStore();
+            renderPending();
+        }
+
+        // Guardar localmente
+        function saveLocalData() {
+            if(!db) {
+                localStorage.setItem('tv_store_apps', JSON.stringify(allApps));
+                localStorage.setItem('tv_store_pass', systemPassword);
+                renderStore();
+                renderPending();
+            }
+        }
+
+        // ================= RENDERING DE VISTAS =================
+        window.renderStore = function(searchQuery = '') {
+            const grid = document.getElementById('apps-grid');
+            const empty = document.getElementById('empty-store');
+            grid.innerHTML = '';
+
+            const approvedApps = allApps.filter(app => {
+                const statusMatch = app.status === 'approved';
+                const categoryMatch = currentCategory === 'all' || app.category === currentCategory;
+                const searchMatch = !searchQuery || 
+                                    app.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                    app.description.toLowerCase().includes(searchQuery.toLowerCase());
+                return statusMatch && categoryMatch && searchMatch;
+            });
+
+            if (approvedApps.length === 0) {
+                grid.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            grid.classList.remove('hidden');
+            empty.classList.add('hidden');
+
+            approvedApps.forEach(app => {
+                const card = document.createElement('div');
+                card.className = "app-card bg-zinc-900 border border-zinc-800/80 rounded-2xl overflow-hidden cursor-pointer group flex flex-col h-full";
+                card.onclick = () => showAppDetails(app);
+                card.innerHTML = `
+                    <div class="h-32 w-full overflow-hidden relative">
+                        <div class="absolute inset-0 bg-black/50 group-hover:bg-transparent transition-colors z-10"></div>
+                        <img src="${app.bgUrl}" onerror="this.src='https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600'" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+                    </div>
+                    <div class="p-5 relative flex-1 flex flex-col">
+                        <img src="${app.iconUrl}" onerror="this.src='https://img.icons8.com/nolan/512/application-window.png'" class="w-14 h-14 rounded-2xl shadow-xl absolute -top-10 left-4 border-4 border-zinc-900 bg-zinc-800 object-cover">
+                        <div class="mt-4 flex-1">
+                            <span class="text-xs text-purple-400 font-bold uppercase tracking-widest">${app.category || 'App'}</span>
+                            <h3 class="font-bold text-lg mt-1 truncate text-white">${app.title}</h3>
+                            <p class="text-zinc-400 text-xs mt-2 line-clamp-3 leading-relaxed">${app.description}</p>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Mostrar Pendientes
+        window.renderPending = function() {
+            const grid = document.getElementById('pending-grid');
+            const empty = document.getElementById('empty-pending');
+            grid.innerHTML = '';
+
+            const pendingApps = allApps.filter(app => app.status === 'pending');
+
+            if (pendingApps.length === 0) {
+                grid.classList.add('hidden');
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            grid.classList.remove('hidden');
+            empty.classList.add('hidden');
+
+            pendingApps.forEach(app => {
+                const card = document.createElement('div');
+                card.className = "bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col gap-4";
+                card.innerHTML = `
+                    <div class="flex gap-4">
+                        <img src="${app.iconUrl}" onerror="this.src='https://img.icons8.com/nolan/512/application-window.png'" class="w-20 h-20 rounded-2xl object-cover bg-zinc-800 border-2 border-zinc-700 shadow-lg shrink-0">
+                        <div class="overflow-hidden">
+                            <span class="text-xs text-purple-400 font-bold uppercase">${app.category || 'App'}</span>
+                            <h3 class="font-extrabold text-xl text-white truncate">${app.title}</h3>
+                            <p class="text-zinc-400 text-xs mt-1 line-clamp-2 leading-relaxed">${app.description}</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 mt-2 border-t border-zinc-800 pt-4">
+                        <button onclick="rejectApp('${app.id}')" class="flex-1 py-2.5 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl font-bold transition-all text-xs">Rechazar / Eliminar</button>
+                        <button onclick="approveApp('${app.id}')" class="flex-1 py-2.5 bg-green-600/10 hover:bg-green-600 text-green-500 hover:text-white rounded-xl font-bold transition-all text-xs">Aceptar / Publicar</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // ================= DETALLES DE APP =================
+        window.showAppDetails = function(app) {
+            const view = document.getElementById('view-details');
+            view.dataset.currentApp = app.id;
+            view.innerHTML = `
+                <div class="relative w-full h-96 rounded-3xl overflow-hidden mb-12 hero-banner group border border-zinc-800 shadow-2xl">
+                    <img src="${app.bgUrl}" onerror="this.src='https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1920'" class="w-full h-full object-cover">
+                    
+                    <!-- Botones superiores -->
+                    <div class="absolute top-0 left-0 w-full p-6 flex justify-between items-start z-20">
+                        <button onclick="goHome()" class="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center hover:bg-white hover:text-black transition-all shadow-lg active:scale-90">
+                            <i class="fa-solid fa-arrow-left text-lg"></i>
+                        </button>
+                        
+                        <div class="relative">
+                            <button onclick="toggleMenu(event)" class="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center hover:bg-zinc-800 transition-all text-xl active:scale-90 shadow-lg">
+                                <i class="fa-solid fa-ellipsis-vertical"></i>
+                            </button>
+                            <div id="dropdown-menu" class="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-30">
+                                <button onclick="requestDelete('${app.id}')" class="w-full text-left px-4 py-3 text-red-500 hover:bg-red-500/10 transition-colors font-semibold flex items-center gap-2 text-sm">
+                                    <i class="fa-solid fa-trash-can"></i> Eliminar de la Tienda
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-5xl mx-auto px-6 -mt-32 relative z-20 flex flex-col md:flex-row gap-8 items-start mb-20">
+                    <img src="${app.iconUrl}" onerror="this.src='https://img.icons8.com/nolan/512/application-window.png'" class="w-36 h-36 md:w-44 md:h-44 rounded-3xl shadow-2xl border-4 border-zinc-950 bg-zinc-900 object-cover shrink-0">
+                    
+                    <div class="flex-1 mt-6 md:mt-16">
+                        <span class="text-xs text-purple-400 font-bold uppercase tracking-widest bg-purple-600/10 px-3.5 py-1.5 rounded-full border border-purple-500/20">${app.category || 'App'}</span>
+                        <h2 class="text-4xl md:text-5xl font-black text-white mt-4 mb-4 leading-none">${app.title}</h2>
+                        <div class="text-zinc-300 text-md leading-relaxed mb-8 max-w-3xl">
+                            ${app.description}
+                        </div>
+                        
+                        <button onclick="downloadApp('${app.id}')" class="bg-purple-600 hover:bg-purple-500 text-white px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 shadow-lg shadow-purple-600/30 transition-all active:scale-95">
+                            <i class="fa-solid fa-download"></i> Descargar e Instalar (.txt)
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            switchView('view-details');
+        }
+
+        window.toggleMenu = function(e) {
+            e.stopPropagation();
+            document.getElementById('dropdown-menu').classList.toggle('active');
+        }
+
+        // Cierra menú contextual si se clickea en otra parte
+        document.addEventListener('click', () => {
+            const dropdown = document.getElementById('dropdown-menu');
+            if (dropdown) dropdown.classList.remove('active');
+        });
+
+        // ================= PROCESAMIENTO DE ARCHIVOS (.TXT) =================
+        window.handleFileSelected = function(input) {
+            const display = document.getElementById('file-name-display');
+            if (input.files && input.files[0]) {
+                display.innerHTML = `<i class="fa-solid fa-check-circle text-green-500 text-xl mr-2"></i> <span class="text-white font-bold">${input.files[0].name}</span>`;
+            } else {
+                display.innerHTML = `<span class="font-bold text-purple-400 hover:underline">Presiona para buscar</span> o arrastra el .txt`;
+            }
+        }
+
+        window.submitApp = function() {
+            const title = document.getElementById('up-title').value.trim();
+            const category = document.getElementById('up-category').value;
+            const desc = document.getElementById('up-desc').value.trim();
+            const fileInput = document.getElementById('up-file');
+
+            if (!title || !desc || !fileInput.files[0]) {
+                return showMessage("Campos incompletos", "Por favor completa todos los campos y sube el archivo .txt de tu app.", "fa-solid fa-triangle-exclamation text-yellow-500");
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                const textContent = e.target.result;
+                const lines = textContent.split(/\r?\n/);
+                
+                if (lines.length < 3) {
+                    return showMessage("Formato inválido", "El .txt debe contener al menos 3 líneas:\n1: Icono URL\n2: Fondo URL\n3+: Código HTML", "fa-solid fa-triangle-exclamation text-red-500");
+                }
+
+                const iconUrl = lines[0].trim();
+                const bgUrl = lines[1].trim();
+
+                const newApp = {
+                    title: title,
+                    category: category,
+                    description: desc,
+                    iconUrl: iconUrl,
+                    bgUrl: bgUrl,
+                    fileContent: textContent,
+                    status: 'pending',
+                    timestamp: Date.now()
+                };
+
+                if (db) {
+                    try {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'apps'), newApp);
+                        showMessage("Enviada con éxito", "Tu app se envió a la lista de 'Pendientes'. Un administrador la revisará muy pronto.", "fa-solid fa-envelope-circle-check text-green-500");
+                    } catch(err) {
+                        console.error(err);
+                        showMessage("Error de red", "No se pudo conectar al servidor para enviar el archivo.", "fa-solid fa-circle-xmark text-red-500");
+                    }
+                } else {
+                    // Modo local temporal
+                    newApp.id = "local_" + Date.now();
+                    allApps.push(newApp);
+                    saveLocalData();
+                    showMessage("Subido (Local)", "Tu app se guardó temporalmente de forma local en Pendientes.", "fa-solid fa-circle-check text-green-500");
+                }
+
+                // Limpiar campos
+                document.getElementById('up-title').value = '';
+                document.getElementById('up-desc').value = '';
+                fileInput.value = '';
+                handleFileSelected(fileInput);
+                goHome();
+            };
+            reader.readAsText(file);
+        }
+
+        // ================= DESCARGA DE ARCHIVO =================
+        window.downloadApp = function(id) {
+            const app = allApps.find(a => a.id === id);
+            if (!app) return;
+
+            const blob = new Blob([app.fileContent], { type: 'text/plain;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.style.display = 'none';
+            downloadAnchor.href = url;
+            downloadAnchor.download = `${app.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(downloadAnchor);
+        }
+
+        // ================= ACCIONES DE ADMINISTRADOR =================
+        window.approveApp = async function(id) {
+            if (db) {
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'apps', id), { status: 'approved' });
+                } catch(e) {
+                    console.error(e);
+                }
+            } else {
+                const app = allApps.find(a => a.id === id);
+                if (app) {
+                    app.status = 'approved';
+                    saveLocalData();
+                }
+            }
+        }
+
+        window.rejectApp = async function(id) {
+            if (db) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'apps', id));
+                } catch(e) {
+                    console.error(e);
+                }
+            } else {
+                allApps = allApps.filter(a => a.id !== id);
+                saveLocalData();
+            }
+        }
+
+        // ================= ELIMINACIÓN DE APP =================
+        window.requestDelete = function(id) {
+            appToDelete = allApps.find(a => a.id === id);
+            if (!appToDelete) return;
+            window.requestPassword(() => openConfirmDelete());
+        }
+
+        window.openConfirmDelete = function() {
+            document.getElementById('del-icon').src = appToDelete.iconUrl;
+            document.getElementById('del-title').innerText = appToDelete.title;
+            switchView('view-confirm-delete');
+        }
+
+        window.cancelDelete = function() {
+            const prevApp = appToDelete;
+            appToDelete = null;
+            if (prevApp) {
+                showAppDetails(prevApp);
+            } else {
+                goHome();
+            }
+        }
+
+        window.executeDelete = async function() {
+            if (!appToDelete) return;
+            const targetId = appToDelete.id;
+            
+            if (db) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'apps', targetId));
+                    showMessage("Eliminada", "La aplicación fue dada de baja de la base de datos.", "fa-solid fa-trash text-zinc-400");
+                } catch(e) {
+                    console.error(e);
+                }
+            } else {
+                allApps = allApps.filter(a => a.id !== targetId);
+                saveLocalData();
+                showMessage("Eliminada (Local)", "La aplicación fue eliminada del almacenamiento local.", "fa-solid fa-trash text-zinc-400");
+            }
+            appToDelete = null;
+            goHome();
+        }
+
+        // ================= CAMBIO DE CONTRASEÑA =================
+        window.openChangePassword = function() {
+            window.requestPassword(() => {
+                document.getElementById('modal-change-pass').classList.add('active');
+            });
+        }
+
+        window.saveNewPassword = async function() {
+            const p1 = document.getElementById('new-pass-1').value.trim();
+            const p2 = document.getElementById('new-pass-2').value.trim();
+
+            if (!p1 || !p2) {
+                return showMessage("Campos vacíos", "Llena las dos cajas de texto.");
+            }
+            if (p1 !== p2) {
+                return showMessage("Fallo de coincidencia", "Las nuevas contraseñas no son idénticas.", "fa-solid fa-circle-xmark text-red-500");
+            }
+
+            systemPassword = p1;
+
+            if (db) {
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'security'), { adminPass: p1 }, { merge: true });
+                    showMessage("Llave Cambiada", "La contraseña de administrador se actualizó exitosamente en la nube.", "fa-solid fa-key text-green-500");
+                } catch(e) {
+                    console.error(e);
+                }
+            } else {
+                saveLocalData();
+                showMessage("Llave Cambiada (Local)", "Contraseña local actualizada correctamente.", "fa-solid fa-key text-green-500");
+            }
+
+            closeModal('modal-change-pass');
+            document.getElementById('new-pass-1').value = '';
+            document.getElementById('new-pass-2').value = '';
+        }
+
+        // ================= SISTEMA DE SEGURIDAD =================
+        window.requestPassword = function(callback) {
+            pendingActionCallback = callback;
+            document.getElementById('modal-password').classList.add('active');
+            setTimeout(() => document.getElementById('pass-input').focus(), 150);
+        }
+
+        window.verifyPassword = function() {
+            const val = document.getElementById('pass-input').value;
+            if (val === systemPassword) {
+                closeModal('modal-password');
+                const cb = pendingActionCallback;
+                pendingActionCallback = null;
+                if (cb) cb();
+            } else {
+                showMessage("Denegado", "La contraseña ingresada es incorrecta.", "fa-solid fa-lock text-red-500");
+            }
+            document.getElementById('pass-input').value = '';
+        }
+
+        // ================= CONTROLADORES DE RUTA / UI =================
+        window.switchView = function(viewId) {
+            document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            
+            // Ocultar buscador y categorías fuera del Home
+            const searchWrap = document.getElementById('search-bar-wrapper');
+            const categoryBar = document.getElementById('category-bar');
+            const btnPass = document.getElementById('btn-change-pass');
+
+            if (viewId === 'view-home') {
+                searchWrap.classList.remove('invisible');
+                categoryBar.classList.remove('hidden');
+                btnPass.classList.remove('hidden');
+            } else {
+                searchWrap.classList.add('invisible');
+                categoryBar.classList.add('hidden');
+                btnPass.classList.add('hidden');
+            }
+            window.scrollTo(0, 0);
+        }
+
+        window.goHome = function() {
+            filterCategory('all');
+            document.getElementById('searchInput').value = '';
+            window.switchView('view-home');
+        }
+
+        window.filterCategory = function(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.className = "cat-btn bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-5 py-2 rounded-full text-sm font-semibold transition-all";
+            });
+            const activeId = cat === 'all' ? 'cat-all' : 'cat-' + cat.toLowerCase().substring(0,6);
+            const activeBtn = document.getElementById(activeId);
+            if (activeBtn) {
+                activeBtn.className = "cat-btn bg-purple-600 text-white px-5 py-2 rounded-full text-sm font-semibold transition-all";
+            }
+            renderStore(document.getElementById('searchInput').value);
+        }
+
+        window.closeModal = function(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Buscador reactivo
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            renderStore(e.target.value);
+        });
+
+        // Arranque Inicial
+        init();
+
+    </script>
+</body>
+</html>
